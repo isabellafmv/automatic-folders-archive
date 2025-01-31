@@ -1,5 +1,5 @@
 import { App, Plugin, TFile, TFolder, PluginSettingTab, Setting, Notice } from "obsidian";
-import * as moment from "moment";
+import moment from "moment";
 
 interface AutomaticFoldersSettings {
 	baseJournalFolder: string;
