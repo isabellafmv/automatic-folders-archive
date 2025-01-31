@@ -17,7 +17,7 @@ const DEFAULT_SETTINGS: AutomaticFoldersSettings = {
 	createMonthFolders: true,
 
 	dailyNoteFormat: "YYYY-MM-DD",
-	monthlyFolderFormat: "MM-DD",
+	monthlyFolderFormat: "MM-YYYY",
 	yearlyFolderFormat: "YYYY",
 };
 
