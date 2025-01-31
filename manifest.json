@@ -1,10 +1,10 @@
 {
-	"id": "sample-plugin",
-	"name": "Sample Plugin",
+	"id": "automatic-folders-plugin",
+	"name": "Automatic Folders and Archiving Daily Notes",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
+	"description": "Automatically creates yearly and monthly folders for your Daily Notes, and moves daily notes to the respective folders, when the day is over.",
+	"author": "Isabella",
 	"authorUrl": "https://obsidian.md",
 	"fundingUrl": "https://obsidian.md/pricing",
 	"isDesktopOnly": false

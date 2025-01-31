@@ -1,89 +1,148 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Plugin, TFile, TFolder, PluginSettingTab, Setting, Notice } from "obsidian";
+import * as moment from "moment";
 
-// Remember to rename these classes and interfaces!
+interface AutomaticFoldersSettings {
+	baseJournalFolder: string;
+	createYearFolders: boolean;
+	createMonthFolders: boolean;
 
-interface MyPluginSettings {
-	mySetting: string;
+	dailyNoteFormat: string;
+	monthlyFolderFormat: string;
+	yearlyFolderFormat: string;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
+const DEFAULT_SETTINGS: AutomaticFoldersSettings = {
+	baseJournalFolder: "1 - journal",
+	createYearFolders: true,
+	createMonthFolders: true,
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+	dailyNoteFormat: "YYYY-MM-DD",
+	monthlyFolderFormat: "MM-DD",
+	yearlyFolderFormat: "YYYY",
+};
+
+export default class AutomaticFoldersPlugin extends Plugin {
+	settings: AutomaticFoldersSettings;
 
 	async onload() {
 		await this.loadSettings();
+		this.addSettingTab(new AutomaticFoldersSettingTab(this.app, this));
 
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
+		console.log("Auto File Organizer loaded");
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
+		await this.ensureCurrentFolderExists();
 
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
+		await this.organizeExistingFiles();
 
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
+		this.registerEvent(
+			this.app.vault.on("create", async (file: TFile) => {
+				if (file.path.startsWith(`${this.settings.baseJournalFolder}/`)) {
+					await this.handleOldDailyFile(file);
 				}
-			}
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+			})
+		);
 	}
 
-	onunload() {
+	async ensureCurrentFolderExists() {
+		//generate year/month path for folderpath
+		const yearString = moment().format(this.settings.yearlyFolderFormat);
+		const monthString = moment().format(this.settings.monthlyFolderFormat);
 
+		const yearlyFolderPath = `${this.settings.baseJournalFolder}/${yearString}`;
+		const monthlyFolderPath = `${this.settings.baseJournalFolder}/${yearString}/${monthString}`;
+
+		// check if yearly folder exists already, if not create
+		await this.ensureFolderExists(yearlyFolderPath);
+		// check if monthly folder exists already, if not create
+		await this.ensureFolderExists(monthlyFolderPath);
+	}
+
+	async ensureFolderExists(folderPath: string) {
+
+		if (!(await this.app.vault.adapter.exists(folderPath))) {
+			await this.app.vault.createFolder(folderPath);
+		}
+	}
+
+	async organizeExistingFiles() {
+		const baseFolder = this.settings.baseJournalFolder;
+		const journalFolder = this.app.vault.getAbstractFileByPath(baseFolder);
+		
+		if (!(journalFolder instanceof TFolder)) {
+			console.error(`Folder "${baseFolder}" not found.`);
+			return;
+		}
+
+		for (const file of journalFolder.children) {
+			if (file instanceof TFile) {
+				await this.handleOldDailyFile(file);
+			}
+		}
+	}
+
+	async handleOldDailyFile(file: TFile): Promise<string | null> {
+
+		const baseFolder = this.settings.baseJournalFolder;
+		const fileBaseName = file.name.replace(/\.[^/.]+$/, "");
+
+		// check files date
+		const getFilesDate = moment(
+			fileBaseName,
+			this.settings.dailyNoteFormat,
+			true
+		);
+		if (!getFilesDate.isValid()) {
+			console.log(
+				`Could not parse a valid date from file name: ${file.name}`
+			);
+			return null;
+		}
+
+		// check if file is today's file
+		const todayString = moment().format(this.settings.dailyNoteFormat);
+		if (fileBaseName == todayString) {
+			console.log(`Skipping today's file: ${file.name}`);
+			return null;
+		}
+
+		const fileYearString = getFilesDate.format(
+			this.settings.yearlyFolderFormat
+		);
+		const fileMonthString = getFilesDate.format(
+			this.settings.monthlyFolderFormat
+		); 
+
+		// where should it go
+		const targetFolderPath = `${baseFolder}/${fileYearString}/${fileMonthString}`;
+
+		await this.ensureFolderExists(targetFolderPath);
+
+		// skip if file is in correct place already
+		if (file.path.startsWith(targetFolderPath)) {
+			console.log(`Skipping "${file.name}" (already in correct folder)`);
+			return null;
+		}
+
+		await this.ensureFolderExists(targetFolderPath);
+
+		// move file
+		const newPath = `${targetFolderPath}/${file.name}`;
+		try {
+			await this.app.vault.rename(file, newPath);
+			console.log(`Moved "${file.name}" to folder: ${targetFolderPath}`);
+			return file.name;
+		} catch (error) {
+			console.error(`Error moving file "${file.name}":`, error);
+			return null;
+		}
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.settings = Object.assign(
+			{},
+			DEFAULT_SETTINGS,
+			await this.loadData()
+		);
 	}
 
 	async saveSettings() {
@@ -91,44 +150,108 @@ export default class MyPlugin extends Plugin {
 	}
 }
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
 
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
+class AutomaticFoldersSettingTab extends PluginSettingTab {
+	plugin: AutomaticFoldersPlugin;
 
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: AutomaticFoldersPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
 
-	display(): void {
-		const {containerEl} = this;
-
+	async display(): Promise<void> {
+		const { containerEl } = this;
 		containerEl.empty();
 
+		// === General Settings ===
+		containerEl.createEl("h3", { text: "Automatic Folders Settings" });
+
+		// Base Journal Folder
 		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Base Journal Folder")
+			.setDesc("The folder where yearly and monthly folders will be created.")
+			.addText(text => 
+				text
+					.setPlaceholder("Enter folder name (e.g., 1 - journal)")
+					.setValue(this.plugin.settings.baseJournalFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.baseJournalFolder = value.trim();
+						await this.plugin.saveSettings();
+						new Notice(`Base journal folder set to: ${value}`);
+					})
+			);
+
+		// Create Yearly Folders Toggle
+		new Setting(containerEl)
+			.setName("Create Yearly Folders")
+			.setDesc("Automatically create folders for each year (e.g., '2025').")
+			.addToggle(toggle => 
+				toggle
+					.setValue(this.plugin.settings.createYearFolders)
+					.onChange(async (value) => {
+						this.plugin.settings.createYearFolders = value;
+						await this.plugin.saveSettings();
+						new Notice(`Yearly folder creation: ${value ? "Enabled" : "Disabled"}`);
+					})
+			);
+
+		// Create Monthly Folders Toggle
+		new Setting(containerEl)
+			.setName("Create Monthly Folders")
+			.setDesc("Automatically create folders for each month (e.g., '02-25').")
+			.addToggle(toggle => 
+				toggle
+					.setValue(this.plugin.settings.createMonthFolders)
+					.onChange(async (value) => {
+						this.plugin.settings.createMonthFolders = value;
+						await this.plugin.saveSettings();
+						new Notice(`Monthly folder creation: ${value ? "Enabled" : "Disabled"}`);
+					})
+			);
+
+		// Daily Note Format
+		new Setting(containerEl)
+			.setName("Daily Note Format")
+			.setDesc("Format for daily note file names (e.g., 'YYYY-MM-DD').")
+			.addText(text => 
+				text
+					.setPlaceholder("Enter format (e.g., YYYY-MM-DD)")
+					.setValue(this.plugin.settings.dailyNoteFormat)
+					.onChange(async (value) => {
+						this.plugin.settings.dailyNoteFormat = value.trim();
+						await this.plugin.saveSettings();
+						new Notice(`Daily note format set to: ${value}`);
+					})
+			);
+
+		// Monthly Folder Format
+		new Setting(containerEl)
+			.setName("Monthly Folder Format")
+			.setDesc("Format for monthly folders (e.g., 'MM-DD').")
+			.addText(text => 
+				text
+					.setPlaceholder("Enter format (e.g., MM-YYYY)")
+					.setValue(this.plugin.settings.monthlyFolderFormat)
+					.onChange(async (value) => {
+						this.plugin.settings.monthlyFolderFormat = value.trim();
+						await this.plugin.saveSettings();
+						new Notice(`Monthly folder format set to: ${value}`);
+					})
+			);
+
+		// Yearly Folder Format
+		new Setting(containerEl)
+			.setName("Yearly Folder Format")
+			.setDesc("Format for yearly folders (e.g., 'YYYY').")
+			.addText(text => 
+				text
+					.setPlaceholder("Enter format (e.g., YYYY)")
+					.setValue(this.plugin.settings.yearlyFolderFormat)
+					.onChange(async (value) => {
+						this.plugin.settings.yearlyFolderFormat = value.trim();
+						await this.plugin.saveSettings();
+						new Notice(`Yearly folder format set to: ${value}`);
+					})
+			);
 	}
 }
