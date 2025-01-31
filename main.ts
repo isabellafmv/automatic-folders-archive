@@ -17,7 +17,7 @@ const DEFAULT_SETTINGS: AutomaticFoldersSettings = {
 	createMonthFolders: true,
 
 	dailyNoteFormat: "YYYY-MM-DD",
-	monthlyFolderFormat: "MM-YYYY",
+	monthlyFolderFormat: "MM-YY",
 	yearlyFolderFormat: "YYYY",
 };
 
@@ -227,10 +227,10 @@ class AutomaticFoldersSettingTab extends PluginSettingTab {
 		// Monthly Folder Format
 		new Setting(containerEl)
 			.setName("Monthly Folder Format")
-			.setDesc("Format for monthly folders (e.g., 'MM-DD').")
+			.setDesc("Format for monthly folders (e.g., 'MM-YY').")
 			.addText(text => 
 				text
-					.setPlaceholder("Enter format (e.g., MM-YYYY)")
+					.setPlaceholder("Enter format (e.g., MM-YY)")
 					.setValue(this.plugin.settings.monthlyFolderFormat)
 					.onChange(async (value) => {
 						this.plugin.settings.monthlyFolderFormat = value.trim();
