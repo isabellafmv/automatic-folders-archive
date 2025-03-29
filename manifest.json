@@ -1,7 +1,7 @@
 {
 	"id": "automatic-folders-archive",
 	"name": "Automatic Folders and Archiving Daily Notes",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"minAppVersion": "0.15.0",
 	"description": "Automatically creates yearly and monthly folders for your Daily Notes, and moves daily notes to the respective folders, when the day is over.",
 	"author": "Isabella",
