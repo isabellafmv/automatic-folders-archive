@@ -5,7 +5,6 @@
 	"minAppVersion": "0.15.0",
 	"description": "Automatically creates yearly and monthly folders for your Daily Notes, and moves daily notes to the respective folders, when the day is over.",
 	"author": "Isabella",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"authorUrl": "https://github.com/isabellafmv",
 	"isDesktopOnly": false
 }
